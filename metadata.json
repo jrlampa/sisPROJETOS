@@ -1,0 +1,7 @@
+{
+  "name": "sisPROJETO",
+  "description": "Plataforma integrada para cálculo de queda de tensão, esforço mecânico e gestão GIS para concessionárias de energia.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
