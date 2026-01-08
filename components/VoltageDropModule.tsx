@@ -1,11 +1,11 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine 
 } from 'recharts';
 import { 
   AlertTriangle, CheckCircle, Calculator, Zap, Plus, Trash2, 
-  Activity, Info, Box, Users, Lightbulb, Settings, RefreshCw, ArrowUpCircle, Check
+  Activity, Info, Box, Users, Lightbulb, Settings, RefreshCw, ArrowUpCircle, Check, AlertCircle
 } from 'lucide-react';
 import { CONDUCTORS_DB, NORMATIVE_LIMITS, PUBLIC_LIGHTING_DB, TRANSFORMER_LIST } from '../constants';
 import { calculateNetwork } from '../services/electricalService';
@@ -14,6 +14,7 @@ import { NetworkSegment, NetworkCalculationResult, OptimizationSuggestion } from
 export const VoltageDropModule: React.FC = () => {
   const [trafoKva, setTrafoKva] = useState(75);
   const [clientClass, setClientClass] = useState<'A' | 'B' | 'C' | 'D'>('B');
+  const [validationErrors, setValidationErrors] = useState<Record<string, Record<string, string>>>({});
 
   const [segments, setSegments] = useState<NetworkSegment[]>([
     { 
@@ -36,8 +37,25 @@ export const VoltageDropModule: React.FC = () => {
   const [result, setResult] = useState<NetworkCalculationResult | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
 
+  // Verifica se há qualquer erro de validação em qualquer segmento
+  const hasErrors = useMemo(() => {
+    return Object.values(validationErrors).some(segErrors => Object.keys(segErrors).length > 0);
+  }, [validationErrors]);
+
+  const validateField = (segId: string, field: string, value: any): string | null => {
+    if (field === 'length') {
+      if (value <= 0) return 'O comprimento deve ser maior que zero.';
+    }
+    if (['mono', 'bi', 'tri', 'triSpecial', 'ipQty', 'dedicatedKva'].includes(field)) {
+      if (value < 0) return 'Não permitido valor negativo.';
+    }
+    return null;
+  };
+
   const handleCalculate = () => {
+    if (hasErrors) return;
     setIsCalculating(true);
+    setResult(null);
     setTimeout(() => {
       const calc = calculateNetwork(segments, trafoKva, clientClass);
       setResult(calc);
@@ -46,6 +64,26 @@ export const VoltageDropModule: React.FC = () => {
   };
 
   const updateSegment = (idx: number, field: keyof NetworkSegment, value: any) => {
+    const segment = segments[idx];
+    const error = validateField(segment.id, field, value);
+
+    setValidationErrors(prev => {
+      const newSegErrors = { ...(prev[segment.id] || {}) };
+      if (error) {
+        newSegErrors[field] = error;
+      } else {
+        delete newSegErrors[field];
+      }
+      
+      const newTotalErrors = { ...prev };
+      if (Object.keys(newSegErrors).length > 0) {
+        newTotalErrors[segment.id] = newSegErrors;
+      } else {
+        delete newTotalErrors[segment.id];
+      }
+      return newTotalErrors;
+    });
+
     const newSegs = [...segments];
     newSegs[idx] = { ...newSegs[idx], [field]: value };
     setSegments(newSegs);
@@ -56,7 +94,6 @@ export const VoltageDropModule: React.FC = () => {
     const idx = segments.findIndex(s => s.id === suggestion.segmentId);
     if (idx !== -1) {
       updateSegment(idx, 'conductorId', suggestion.suggestedConductorId);
-      // Forçar recálculo para limpar sugestão aplicada
       setTimeout(handleCalculate, 50);
     }
   };
@@ -75,7 +112,13 @@ export const VoltageDropModule: React.FC = () => {
   };
 
   const removeSegment = (idx: number) => {
+    const segId = segments[idx].id;
     setSegments(segments.filter((_, i) => i !== idx));
+    setValidationErrors(prev => {
+      const next = { ...prev };
+      delete next[segId];
+      return next;
+    });
     setResult(null);
   };
 
@@ -90,7 +133,6 @@ export const VoltageDropModule: React.FC = () => {
   return (
     <div className="space-y-6 min-h-[600px]">
       
-      {/* Simulation Header */}
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="bg-slate-900 px-6 py-4 flex justify-between items-center flex-wrap gap-4">
            <div>
@@ -156,8 +198,6 @@ export const VoltageDropModule: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-        
-        {/* Editor Grid */}
         <div className="xl:col-span-2 space-y-4">
            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
              <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
@@ -183,6 +223,7 @@ export const VoltageDropModule: React.FC = () => {
                   <tbody className="divide-y divide-slate-100">
                      {segments.map((seg, idx) => {
                        const segResult = result?.segments.find(r => r.segmentId === seg.id);
+                       const segErrors = validationErrors[seg.id] || {};
                        return (
                         <tr key={seg.id} className={`hover:bg-slate-50 transition ${segResult && !segResult.isCompliant ? 'bg-red-50/50' : ''}`}>
                           <td className="p-2">
@@ -191,27 +232,46 @@ export const VoltageDropModule: React.FC = () => {
                                className="w-full p-1 font-bold border-b border-transparent focus:border-blue-300 outline-none text-slate-700 bg-transparent"
                              />
                           </td>
-                          <td className="p-2">
-                             <input type="number" value={seg.length} onChange={e => updateSegment(idx, 'length', Number(e.target.value))} className="w-full p-1 text-center font-mono border rounded"/>
+                          <td className="p-2 relative">
+                             <input 
+                               type="number" 
+                               value={seg.length} 
+                               onChange={e => updateSegment(idx, 'length', Number(e.target.value))} 
+                               className={`w-full p-1 text-center font-mono border rounded transition-colors ${segErrors.length ? 'border-red-500 bg-red-50 text-red-600' : ''}`}
+                             />
+                             {segErrors.length && <div className="absolute left-0 right-0 top-full z-10 bg-red-600 text-white text-[9px] p-1 rounded shadow-lg pointer-events-none mt-1 animate-in slide-in-from-top-1">{segErrors.length}</div>}
                           </td>
                           <td className="p-2">
                              <div className="grid grid-cols-4 gap-1">
-                                <input type="number" title="Mono" value={seg.mono} onChange={e => updateSegment(idx, 'mono', Number(e.target.value))} className="w-full p-1 text-center text-xs rounded border" />
-                                <input type="number" title="Bi" value={seg.bi} onChange={e => updateSegment(idx, 'bi', Number(e.target.value))} className="w-full p-1 text-center text-xs rounded border" />
-                                <input type="number" title="Tri" value={seg.tri} onChange={e => updateSegment(idx, 'tri', Number(e.target.value))} className="w-full p-1 text-center text-xs rounded border" />
-                                <input type="number" title="TriEsp" value={seg.triSpecial} onChange={e => updateSegment(idx, 'triSpecial', Number(e.target.value))} className="w-full p-1 text-center text-xs rounded border bg-amber-50" />
+                                <input type="number" title="Mono" value={seg.mono} onChange={e => updateSegment(idx, 'mono', Number(e.target.value))} className={`w-full p-1 text-center text-xs rounded border ${segErrors.mono ? 'border-red-500 bg-red-50 text-red-600' : ''}`} />
+                                <input type="number" title="Bi" value={seg.bi} onChange={e => updateSegment(idx, 'bi', Number(e.target.value))} className={`w-full p-1 text-center text-xs rounded border ${segErrors.bi ? 'border-red-500 bg-red-50 text-red-600' : ''}`} />
+                                <input type="number" title="Tri" value={seg.tri} onChange={e => updateSegment(idx, 'tri', Number(e.target.value))} className={`w-full p-1 text-center text-xs rounded border ${segErrors.tri ? 'border-red-500 bg-red-50 text-red-600' : ''}`} />
+                                <input type="number" title="TriEsp" value={seg.triSpecial} onChange={e => updateSegment(idx, 'triSpecial', Number(e.target.value))} className={`w-full p-1 text-center text-xs rounded border ${segErrors.triSpecial ? 'border-red-500 bg-red-50 text-red-600' : 'bg-amber-50'}`} />
                              </div>
+                             {(segErrors.mono || segErrors.bi || segErrors.tri || segErrors.triSpecial) && <p className="text-[9px] text-red-600 font-bold mt-1">Valores negativos não permitidos.</p>}
                           </td>
-                          <td className="p-2">
-                             <input type="number" value={seg.dedicatedKva} onChange={e => updateSegment(idx, 'dedicatedKva', Number(e.target.value))} className="w-full p-1 text-center font-mono border rounded"/>
+                          <td className="p-2 relative">
+                             <input 
+                               type="number" 
+                               value={seg.dedicatedKva} 
+                               onChange={e => updateSegment(idx, 'dedicatedKva', Number(e.target.value))} 
+                               className={`w-full p-1 text-center font-mono border rounded ${segErrors.dedicatedKva ? 'border-red-500 bg-red-50 text-red-600' : ''}`}
+                             />
+                             {segErrors.dedicatedKva && <p className="text-[9px] text-red-600 font-bold mt-1">Erro de carga.</p>}
                           </td>
                           <td className="p-2">
                              <div className="flex gap-1">
                                <select value={seg.ipType} onChange={e => updateSegment(idx, 'ipType', e.target.value)} className="text-[10px] p-1 border rounded w-full">
                                  {Object.keys(PUBLIC_LIGHTING_DB).map(k => <option key={k} value={k}>{k}</option>)}
                                </select>
-                               <input type="number" value={seg.ipQty} onChange={e => updateSegment(idx, 'ipQty', Number(e.target.value))} className="w-10 p-1 text-center text-xs border rounded"/>
+                               <input 
+                                 type="number" 
+                                 value={seg.ipQty} 
+                                 onChange={e => updateSegment(idx, 'ipQty', Number(e.target.value))} 
+                                 className={`w-10 p-1 text-center text-xs border rounded ${segErrors.ipQty ? 'border-red-500 bg-red-50 text-red-600' : ''}`}
+                               />
                              </div>
+                             {segErrors.ipQty && <p className="text-[9px] text-red-600 font-bold mt-1 italic">Qtd inválida.</p>}
                           </td>
                           <td className="p-2">
                              <select value={seg.conductorId} onChange={e => updateSegment(idx, 'conductorId', e.target.value)} className="w-full p-1 border rounded text-xs font-bold text-blue-700">
@@ -219,7 +279,7 @@ export const VoltageDropModule: React.FC = () => {
                              </select>
                           </td>
                           <td className="p-2">
-                             <button onClick={() => removeSegment(idx)} className="text-slate-300 hover:text-red-500 p-1"><Trash2 size={16}/></button>
+                             <button onClick={() => removeSegment(idx)} className="text-slate-300 hover:text-red-500 p-1 transition"><Trash2 size={16}/></button>
                           </td>
                         </tr>
                       );
@@ -229,10 +289,18 @@ export const VoltageDropModule: React.FC = () => {
              </div>
              
              <div className="p-6 bg-slate-50 border-t border-slate-200">
+               {hasErrors && (
+                 <div className="mb-4 flex items-center gap-2 text-red-600 bg-red-50 p-3 rounded-lg border border-red-100 animate-in fade-in">
+                    <AlertCircle size={18}/>
+                    <p className="text-xs font-bold">Corrija os erros destacados na tabela antes de prosseguir com o cálculo.</p>
+                 </div>
+               )}
                <button 
                  onClick={handleCalculate}
-                 disabled={isCalculating}
-                 className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-3 transition disabled:opacity-50"
+                 disabled={isCalculating || hasErrors}
+                 className={`w-full py-4 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-3 transition ${
+                   hasErrors ? 'bg-slate-300 cursor-not-allowed opacity-80' : 'bg-blue-600 hover:bg-blue-700'
+                 }`}
                >
                  {isCalculating ? <RefreshCw size={24} className="animate-spin"/> : <Calculator size={24} />}
                  <span className="text-lg">Processar Laudo Técnico SisCQT</span>
@@ -240,7 +308,6 @@ export const VoltageDropModule: React.FC = () => {
              </div>
            </div>
            
-           {/* Detailed Results Table */}
            {result && (
              <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden animate-in slide-in-from-bottom-4">
                 <div className="p-4 bg-slate-800 text-white font-bold text-sm flex justify-between">
@@ -279,7 +346,6 @@ export const VoltageDropModule: React.FC = () => {
            )}
         </div>
 
-        {/* Real-time Visualization & Insights */}
         <div className="space-y-6">
            <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 h-72 flex flex-col relative">
              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Perfil de Tensão Real (V)</h4>
@@ -318,7 +384,6 @@ export const VoltageDropModule: React.FC = () => {
                     <p className="text-[10px] text-slate-500 mt-1 italic">Considerando Curva {clientClass} (Diversidade ENEL)</p>
                   </div>
                   
-                  {/* Suggestions Section */}
                   {result.suggestions.length > 0 && (
                     <div className="space-y-2">
                        <p className="text-[10px] font-bold text-blue-400 uppercase tracking-widest flex items-center gap-1 mt-4">
