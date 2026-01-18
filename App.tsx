@@ -14,25 +14,17 @@ import { NodeDetailsModal } from './components/NodeDetailsModal';
 import { SpanDetailsModal } from './components/SpanDetailsModal';
 import { Activity, FileText, CheckCircle, AlertTriangle, Database, Map, Zap, RefreshCw, Layers, Globe, Smartphone, X } from 'lucide-react';
 import { PosteData, MapEdge } from './types';
-
-// Mock Data
-const MOCK_NODES: PosteData[] = [
-  { id: 'PT-01', x: 100, y: 100, status: 'ok', resistenciaNominal: 600, tipo: 'fisico', electrical: { segmentId: 's1', segmentName: 'TR-01', totalClients: 10, localKvaDist: 15, localKvaPoint: 0, downstreamKva: 0, momentKvaM: 100, voltageDropAbs: 2, voltageDropPercent: 1.2, accumulatedDropPercent: 1.2, voltageAtEnd: 217.4, currentAmp: 45, iccKa: 3, isCompliant: true, message: 'OK' } },
-  { id: 'PT-02', x: 250, y: 120, status: 'warning', resistenciaNominal: 600, tipo: 'fisico', mechanical: { poleId: 'PT-02', totalResultantDan: 510, resultantAngle: 45, nominalResistance: 600, usagePercent: 85, isCompliant: true, fxTotal: 360, fyTotal: 360, calculatedCables: [] } },
-  { id: 'PT-03', x: 400, y: 150, status: 'critical', resistenciaNominal: 300, tipo: 'fisico', electrical: { segmentId: 's3', segmentName: 'PT-02', totalClients: 20, localKvaDist: 30, localKvaPoint: 0, downstreamKva: 0, momentKvaM: 400, voltageDropAbs: 12, voltageDropPercent: 5.5, accumulatedDropPercent: 6.7, voltageAtEnd: 205.2, currentAmp: 110, iccKa: 2, isCompliant: false, message: 'Violação QT' } },
-  { id: 'V-01', x: 250, y: 50, status: 'neutral', resistenciaNominal: 0, tipo: 'fantasma' },
-];
-
-const MOCK_EDGES: MapEdge[] = [
-  { id: 'e1', sourceId: 'PT-01', targetId: 'PT-02', status: 'ok', conductorId: 'cal-70', lengthHorizontal: 40, heightDiff: 1.2 },
-  { id: 'e2', sourceId: 'PT-02', targetId: 'PT-03', status: 'critical', conductorId: 'cal-35', lengthHorizontal: 50, heightDiff: 5.5 },
-  { id: 'e3', sourceId: 'V-01', targetId: 'PT-02', status: 'ok', conductorId: 'cal-70', lengthHorizontal: 35, heightDiff: 0.5 },
-];
+import { ProjectProvider, useProjectContext } from './context/ProjectContext';
 
 const Dashboard = () => {
-  const [selectedNode, setSelectedNode] = useState<PosteData | null>(null);
-  const [selectedEdge, setSelectedEdge] = useState<MapEdge | null>(null);
-  const [viewMode, setViewMode] = useState<'schematic' | 'geographic'>('schematic');
+  const {
+    nodes,
+    edges,
+    selectedNode,
+    selectNode
+  } = useProjectContext();
+  const [selectedEdge, setSelectedEdge] = useState < MapEdge | null > (null);
+  const [viewMode, setViewMode] = useState < 'schematic' | 'geographic' > ('schematic');
   const [isFieldModalOpen, setIsFieldModalOpen] = useState(false);
 
   return (
@@ -80,9 +72,9 @@ const Dashboard = () => {
           </div>
           <div className="flex-1 relative overflow-hidden rounded-lg">
             {viewMode === 'schematic' ? (
-              <NetworkMap nodes={MOCK_NODES} edges={MOCK_EDGES} onSelectNode={setSelectedNode} onSelectEdge={setSelectedEdge} />
+              <NetworkMap onSelectEdge={setSelectedEdge} />
             ) : (
-              <GisView nodes={MOCK_NODES} edges={MOCK_EDGES} onSelectNode={setSelectedNode} standalone={false} />
+              <GisView standalone={false} />
             )}
           </div>
         </div>
@@ -120,7 +112,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      <NodeDetailsModal node={selectedNode} onClose={() => setSelectedNode(null)} />
+      <NodeDetailsModal node={selectedNode} onClose={() => selectNode(null)} />
       <SpanDetailsModal edge={selectedEdge} onClose={() => setSelectedEdge(null)} />
 
       {/* Field Mode Modal (Tablet) */}
@@ -159,9 +151,11 @@ const App: React.FC = () => {
     }
   };
   return (
-    <Layout activeTab={activeTab} onTabChange={setActiveTab}>
-      {renderContent()}
-    </Layout>
+    <ProjectProvider>
+      <Layout activeTab={activeTab} onTabChange={setActiveTab}>
+        {renderContent()}
+      </Layout>
+    </ProjectProvider>
   );
 };
 

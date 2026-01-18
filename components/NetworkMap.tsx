@@ -1,15 +1,15 @@
 
 import React from 'react';
-import { PosteData, MapEdge, NodeStatus } from '../types';
+import { NodeStatus } from '../types';
+import { useProjectContext } from '../context/ProjectContext';
+import { MapEdge } from '../types';
 
 interface NetworkMapProps {
-  nodes: PosteData[];
-  edges: MapEdge[];
-  onSelectNode: (node: PosteData) => void;
   onSelectEdge: (edge: MapEdge) => void;
 }
 
-export const NetworkMap: React.FC<NetworkMapProps> = ({ nodes, edges, onSelectNode, onSelectEdge }) => {
+export const NetworkMap: React.FC<NetworkMapProps> = ({ onSelectEdge }) => {
+  const { nodes, edges, selectNode } = useProjectContext();
   const padding = 100;
   const minX = Math.min(...nodes.map(n => n.x)) - padding;
   const maxX = Math.max(...nodes.map(n => n.x)) + padding;
@@ -78,7 +78,7 @@ export const NetworkMap: React.FC<NetworkMapProps> = ({ nodes, edges, onSelectNo
           const isCritical = node.status === 'critical';
 
           return (
-            <g key={node.id} className="cursor-pointer group" onClick={() => onSelectNode(node)}>
+            <g key={node.id} className="cursor-pointer group" onClick={() => selectNode(node)}>
               <circle cx={node.x} cy={node.y} r={radius + 4} fill={color} fillOpacity="0" className="group-hover:fill-opacity-10 transition-all duration-300" />
               {isCritical && (
                 <circle cx={node.x} cy={node.y} r={radius}>

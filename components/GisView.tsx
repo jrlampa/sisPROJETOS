@@ -6,27 +6,21 @@ import {
   Ruler, Mountain, AlertTriangle, FileUp, Loader2, SquareDashed, Info,
   MousePointer2, MapPin, Share2, Search, Filter, ChevronRight, X
 } from 'lucide-react';
-import { PosteData, MapEdge, NodeStatus } from '../types';
+import { MapEdge, NodeStatus } from '../types';
+import { useProjectContext } from '../context/ProjectContext';
 
 interface GisViewProps {
-  nodes?: PosteData[];
-  edges?: MapEdge[];
-  onSelectNode?: (node: PosteData) => void;
   onSelectEdge?: (edge: MapEdge) => void;
-  onUpdateNodePosition?: (id: string, lat: number, lng: number) => void;
   standalone?: boolean;
 }
 
 type MapTool = 'select' | 'add-pole' | 'add-span' | 'measure';
 
 export const GisView: React.FC<GisViewProps> = ({ 
-  nodes = [], 
-  edges = [], 
-  onSelectNode, 
   onSelectEdge,
-  onUpdateNodePosition,
   standalone = true 
 }) => {
+  const { nodes, edges, selectNode } = useProjectContext();
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const markersRef = useRef<L.LayerGroup | null>(null);
@@ -73,7 +67,7 @@ export const GisView: React.FC<GisViewProps> = ({
     });
 
     return () => { map.remove(); mapInstanceRef.current = null; };
-  }, [activeTool]);
+  }, [activeTool, nodes.length]);
 
   useEffect(() => {
     if (!mapInstanceRef.current || !markersRef.current || !linesRef.current) return;
@@ -115,27 +109,20 @@ export const GisView: React.FC<GisViewProps> = ({
         interactive: true
       });
 
-      // Se for standalone e ferramenta de seleção, permitir drag
-      if (activeTool === 'select' && onUpdateNodePosition) {
-        // Marcadores simples não suportam drag nativo do Leaflet como Circles. 
-        // Em produção, usaríamos L.Marker com um icon customizado para permitir drag.
-      }
-
       marker.on('click', (e) => { 
         L.DomEvent.stopPropagation(e);
-        if (onSelectNode) onSelectNode(node); 
+        selectNode(node); 
       });
 
       markersRef.current?.addLayer(marker);
     });
-  }, [nodes, edges, activeTool]);
+  }, [nodes, edges, activeTool, selectNode, onSelectEdge]);
 
   const filteredNodes = nodes.filter(n => n.id.toLowerCase().includes(searchTerm.toLowerCase()));
 
   return (
     <div className="relative w-full h-full flex overflow-hidden rounded-xl border border-slate-200 shadow-lg bg-slate-50">
       
-      {/* Sidebar de Inventário */}
       {isSidebarOpen && (
         <div className="w-80 bg-white border-r border-slate-200 flex flex-col z-10 shadow-xl animate-in slide-in-from-left duration-300">
            <div className="p-4 border-b border-slate-100 bg-slate-50/50">
@@ -160,7 +147,7 @@ export const GisView: React.FC<GisViewProps> = ({
                  {filteredNodes.map(node => (
                    <button 
                      key={node.id} 
-                     onClick={() => onSelectNode?.(node)}
+                     onClick={() => selectNode(node)}
                      className="w-full p-3 rounded-lg hover:bg-slate-50 border border-transparent hover:border-slate-100 flex items-center justify-between group transition"
                    >
                      <div className="flex items-center gap-3">
@@ -189,11 +176,9 @@ export const GisView: React.FC<GisViewProps> = ({
         </div>
       )}
 
-      {/* Main Map Area */}
       <div className="flex-1 relative">
         <div ref={mapContainerRef} className="absolute inset-0 z-0 bg-slate-100" />
 
-        {/* Floating Toolbar (Active Manipulation) */}
         <div className="absolute top-4 left-4 z-[400] flex flex-col gap-2">
            {!isSidebarOpen && (
              <button onClick={() => setIsSidebarOpen(true)} className="p-3 bg-white rounded-xl shadow-lg border border-slate-200 text-slate-600 hover:bg-slate-50"><Layers size={20}/></button>
@@ -231,7 +216,6 @@ export const GisView: React.FC<GisViewProps> = ({
            </div>
         </div>
 
-        {/* Tooltip Overlay (Instruções da ferramenta) */}
         {activeTool !== 'select' && (
           <div className="absolute top-4 left-24 z-[400] bg-slate-900/90 text-white px-4 py-2 rounded-full text-xs font-bold shadow-xl animate-in fade-in slide-in-from-left-4">
              {activeTool === 'add-pole' && "Clique no mapa para posicionar um novo poste"}
@@ -240,7 +224,6 @@ export const GisView: React.FC<GisViewProps> = ({
           </div>
         )}
 
-        {/* Footer Info (Coords & Altimetry) */}
         <div className="absolute bottom-4 right-4 z-[400] flex items-center gap-3">
            {cursorCoords && (
              <div className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-lg border border-slate-200 shadow-lg text-[10px] font-mono flex gap-4">
