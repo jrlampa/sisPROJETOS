@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "@tailwindcss/postcss": "^4.1.18",
     "leaflet": "1.9.4",
     "leaflet.markercluster": "1.5.3",
     "lucide-react": "^0.562.0",
