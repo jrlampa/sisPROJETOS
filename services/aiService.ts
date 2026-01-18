@@ -1,15 +1,15 @@
 
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 
 const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 if (!apiKey) {
   throw new Error("VITE_GEMINI_API_KEY is not set in the environment.");
 }
 
-const genAI = new GoogleGenerativeAI(apiKey);
+const ai = new GoogleGenAI(apiKey);
 
-const modelFlash = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
-const modelPro = genAI.getGenerativeModel({ model: "gemini-1.5-pro-latest" });
+const modelFlash = ai.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+const modelPro = ai.getGenerativeModel({ model: "gemini-1.5-pro-latest" });
 
 /**
  * FEATURE: Fast AI responses

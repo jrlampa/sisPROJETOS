@@ -43,7 +43,7 @@ export const GisView: React.FC<GisViewProps> = ({
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
     
-    const center: [number, number] = nodes.length > 0 ? [-23.5878, -46.6590] : [-23.5878, -46.6590];
+    const center: [number, number] = [-23.5878, -46.6590];
     const map = L.map(mapContainerRef.current, { 
       zoomControl: false, 
       attributionControl: false 
@@ -59,18 +59,36 @@ export const GisView: React.FC<GisViewProps> = ({
       setCursorCoords({ lat: e.latlng.lat, lng: e.latlng.lng });
     });
 
-    map.on('click', (e: L.LeafletMouseEvent) => {
+    return () => { 
+        if(mapInstanceRef.current) {
+            mapInstanceRef.current.remove();
+            mapInstanceRef.current = null;
+        }
+    };
+  }, []); // Dependência vazia para executar apenas uma vez
+
+  // Efeito separado para lidar com cliques no mapa dependendo da ferramenta
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    const handleClick = (e: L.LeafletMouseEvent) => {
       if (activeTool === 'add-pole') {
         console.log("Add pole at", e.latlng);
         // Implementação de adição de novo nó aqui
       }
-    });
+    };
 
-    return () => { map.remove(); mapInstanceRef.current = null; };
-  }, [activeTool, nodes.length]);
+    map.on('click', handleClick);
+
+    return () => {
+      map.off('click', handleClick);
+    };
+  }, [activeTool]); // Reage à mudança de ferramenta
 
   useEffect(() => {
-    if (!mapInstanceRef.current || !markersRef.current || !linesRef.current) return;
+    if (!markersRef.current || !linesRef.current) return;
+    
     markersRef.current.clearLayers();
     linesRef.current.clearLayers();
 
@@ -116,7 +134,7 @@ export const GisView: React.FC<GisViewProps> = ({
 
       markersRef.current?.addLayer(marker);
     });
-  }, [nodes, edges, activeTool, selectNode, onSelectEdge]);
+  }, [nodes, edges, selectNode, onSelectEdge]); // Dependências corretas
 
   const filteredNodes = nodes.filter(n => n.id.toLowerCase().includes(searchTerm.toLowerCase()));
 
